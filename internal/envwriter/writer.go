@@ -53,3 +53,23 @@ func needsQuoting(v string) bool {
 	}
 	return false
 }
+
+// ValidateKeys checks that all keys in the map are non-empty and contain only
+// alphanumeric characters or underscores, as required by most shell environments.
+func ValidateKeys(secrets map[string]string) error {
+	for k := range secrets {
+		if k == "" {
+			return fmt.Errorf("envwriter: secret key must not be empty")
+		}
+		for _, ch := range k {
+			if !isValidKeyChar(ch) {
+				return fmt.Errorf("envwriter: invalid character %q in key %q", ch, k)
+			}
+		}
+	}
+	return nil
+}
+
+func isValidKeyChar(ch rune) bool {
+	return (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '_'
+}
