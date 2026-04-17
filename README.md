@@ -41,11 +41,26 @@ API_KEY=abc123
 | `--output` | Output `.env` file path | `.env` |
 | `--append` | Append to existing file instead of overwriting | `false` |
 | `--dry-run` | Print secrets to stdout without writing to disk | `false` |
+| `--prefix` | Add a prefix to all exported variable names | *(none)* |
 
 ### Example with dry run
 
 ```bash
 vaultpull --path secret/data/myapp --dry-run
+```
+
+### Example with prefix
+
+```bash
+vaultpull --path secret/data/myapp --prefix MYAPP_
+```
+
+This would produce output like:
+
+```
+MYAPP_DB_HOST=db.example.com
+MYAPP_DB_PASSWORD=supersecret
+MYAPP_API_KEY=abc123
 ```
 
 ---
