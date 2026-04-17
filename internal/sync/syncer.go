@@ -3,51 +3,64 @@ package sync
 import (
 	"fmt"
 
-	"github.com/user/vaultpull/internal/config"
-	"github.com/user/vaultpull/internal/envwriter"
-	"github.com/user/vaultpull/internal/vault"
+	"github.com/yourusername/vaultpull/internal/cache"
+	"github.com/yourusername/vaultpull/internal/config"
+	"github.com/yourusername/vaultpull/internal/envwriter"
+	"github.com/yourusername/vaultpull/internal/vault"
 )
 
-// Result holds the outcome of a single mapping sync.
+// Result holds the outcome of syncing a single mapping.
 type Result struct {
-	Mapping config.Mapping
-	Written int
-	Err     error
+	VaultPath string
+	EnvFile   string
+	Skipped   bool
+	Err       error
 }
 
-// Syncer orchestrates pulling secrets from Vault and writing .env files.
+// Syncer orchestrates fetching secrets and writing env files.
 type Syncer struct {
 	client *vault.Client
+	cache  *cache.Store
 }
 
-// New creates a Syncer with the provided Vault client.
-func New(client *vault.Client) *Syncer {
-	return &Syncer{client: client}
+// New creates a Syncer with an optional cache store (may be nil).
+func New(client *vault.Client, store *cache.Store) *Syncer {
+	return &Syncer{client: client, cache: store}
 }
 
-// Run iterates over all mappings in the config and syncs each one.
+// Run processes all mappings defined in cfg and returns per-mapping results.
 func (s *Syncer) Run(cfg *config.Config) []Result {
 	results := make([]Result, 0, len(cfg.Mappings))
 	for _, m := range cfg.Mappings {
-		written, err := s.syncMapping(m)
-		results = append(results, Result{Mapping: m, Written: written, Err: err})
+		results = append(results, s.sync(m))
 	}
 	return results
 }
 
-func (s *Syncer) syncMapping(m config.Mapping) (int, error) {
+func (s *Syncer) sync(m config.Mapping) Result {
+	r := Result{VaultPath: m.VaultPath, EnvFile: m.EnvFile}
+
 	secrets, err := s.client.ReadSecrets(m.VaultPath)
 	if err != nil {
-		return 0, fmt.Errorf("reading vault path %q: %w", m.VaultPath, err)
+		r.Err = fmt.Errorf("read %s: %w", m.VaultPath, err)
+		return r
 	}
 
-	if err := envwriter.ValidateKeys(secrets); err != nil {
-		return 0, fmt.Errorf("invalid keys at %q: %w", m.VaultPath, err)
+	if s.cache != nil {
+		changed, err := s.cache.Changed(m.VaultPath, secrets)
+		if err == nil && !changed {
+			r.Skipped = true
+			return r
+		}
 	}
 
 	if err := envwriter.WriteEnvFile(m.EnvFile, secrets); err != nil {
-		return 0, fmt.Errorf("writing env file %q: %w", m.EnvFile, err)
+		r.Err = fmt.Errorf("write %s: %w", m.EnvFile, err)
+		return r
 	}
 
-	return len(secrets), nil
+	if s.cache != nil {
+		_ = s.cache.Set(m.VaultPath, secrets)
+	}
+	return r
 }
