@@ -81,6 +81,24 @@ func TestWriteEnvFile_SortedOutput(t *testing.T) {
 	}
 }
 
+func TestWriteEnvFile_EmptySecrets(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, ".env")
+
+	if err := WriteEnvFile(path, map[string]string{}); err != nil {
+		t.Fatalf("unexpected error writing empty secrets: %v", err)
+	}
+
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("failed to read written file: %v", err)
+	}
+
+	if strings.TrimSpace(string(content)) != "" {
+		t.Errorf("expected empty file for empty secrets, got:\n%s", content)
+	}
+}
+
 func must(b []byte, err error) []byte {
 	if err != nil {
 		panic(err)
